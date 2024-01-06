@@ -12,5 +12,5 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	server.StartServer()
+	server.StartServer(10)
 }

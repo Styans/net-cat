@@ -1,16 +1,18 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net-cat/internal/delivery"
 	"net-cat/internal/helpers"
+	"net-cat/internal/myerrors"
 	"os"
 )
 
 var (
-	port         = "localhost:8080"
-	MaxListeners = 0
+	port    = "localhost:8080"
+	errLogo = "( ͡° ͜ʖ ͡°)\n"
 )
 
 func InitVars() error {
@@ -23,7 +25,7 @@ func InitVars() error {
 		}
 	case 1:
 	default:
-
+		return errors.New(myerrors.IncorectArgs)
 	}
 	delivery.Joining = make(chan delivery.Client)
 	delivery.Lefting = make(chan delivery.Client)
@@ -32,21 +34,35 @@ func InitVars() error {
 	return nil
 }
 
-func StartServer() {
+func StartServer(maxListeners int) error {
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 	defer listener.Close()
 
 	fmt.Printf("Listening for connections on %s\n", listener.Addr().String())
 	go BroadCastServer()
+	logo, err := os.ReadFile("logo.txt")
+	if err != nil {
+		logo = []byte(errLogo)
+	}
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			return
+			return err
 		}
+		delivery.Mut.Lock()
+		if delivery.NListeners > maxListeners {
+			conn.Write([]byte(myerrors.MaxConnectionsMessage))
+			conn.Close()
+			delivery.Mut.Unlock()
 
-		go delivery.ProcessClient(conn)
+			continue
+		}
+		delivery.NListeners++
+		delivery.Mut.Unlock()
+
+		go delivery.ProcessClient(logo, conn)
 	}
 }
